@@ -33,7 +33,6 @@ typedef struct{
 }Nodo;
 
 
-
 // Funzione msg: restituisce il messaggio da inviare al vicino i
 int msg(NodeState w, int i) {
   if (w.snd_flag) {
@@ -43,6 +42,21 @@ int msg(NodeState w, int i) {
     }
 }
 
+char* ApriFile(int id_nodo, int id_nodo_vicino) {
+    char* percorso = malloc(50);
+    if (!percorso) {
+        perror("malloc");
+        exit(1);
+    }
+
+    if(id_nodo > id_nodo_vicino){
+        sprintf(percorso, "fifo_%d_%d", id_nodo_vicino, id_nodo);
+    } else {
+        sprintf(percorso, "fifo_%d_%d", id_nodo, id_nodo_vicino);
+    }
+
+    return percorso;
+}
 
 
 //il nodo accetta messaggi solo la prima volta
@@ -166,44 +180,29 @@ void* funzioneThread(void*args){
     //dobbiamo controllare se i nodi vicini hanno inviato dati sulla fifo
     while(1){
         if(nodo.stato.snd_flag==0){
-        for(int i=0;i<numero_vicini;i++){
-            //dobbiamo per ogni vicino aprire la fifo in lettura
-            char percorso[50];
-            int fd;
-            //se sono il thread con id 4 e devo aprire la fifo con il thread uno il seguente codice mi dà errore, dobbiamo verificare come i thread vengono creati
-            if (nodo.id_nodo>nodo.vicini[i]){
-                sprintf(percorso,"fifo_%d_%d",nodo.vicini[i],nodo.id_nodo); //in questo modo apriamo bene la fifo correttamente
-                fd = open(percorso, O_RDONLY | O_NONBLOCK); //apriamo la fifo in sola lettura  e in modalità non bloccante
+            for(int i=0;i<numero_vicini;i++){
+                //dobbiamo per ogni vicino aprire la fifo in lettura
+                char* percorso = ApriFile(nodo.id_nodo, nodo.vicini[i]);
+                int fd = open(percorso, O_RDONLY | O_NONBLOCK);
                 if (fd == -1) {
                     perror("Errore apertura FIFO in lettura");
                 }
-            }else{
-                sprintf(percorso,"fifo_%d_%d",nodo.id_nodo,nodo.vicini[i]);
-                fd = open(percorso, O_RDONLY | O_NONBLOCK); //apriamo la fifo in sola lettura  e in modalità non bloccante
-                if (fd == -1) {
-                    perror("Errore apertura FIFO in lettura");
-                }
-            }
+                free(percorso);  
                 ssize_t n=read(fd,&y[i],sizeof(int));
-                printf("y[i]:%d\n",y[i]);
-                close(fd); 
-                // la funzione read NON scrive nulla nel buffer &y[i]  se non c’è niente da leggere.
-                //leggiamo il dato inviato dal vicino e lo salviamo sulla read
-                //la read se non c'è alcun dato da leggere restituisce errno settato EAGAIN o EWOULDBLOCK
-                //errno è una variabile che il sistema imposta quando una funzione di sistema fallisce
-                if(n==-1){
-                    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-                        //non abbiamo ricevuto nessun dato
-                        y[i] = -1; 
-                }else{
-                    //altri tipi di errore
-                    perror("read");
-                    return NULL;
+                if (n == -1) {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        printf("Nessun dato disponibile su fifo con %d\n", nodo.vicini[i]);
+                    } else {
+                        perror("Errore lettura FIFO");
                     }
+                    y[i] = -1; // o qualsiasi valore sentinella
+                } else if (n == 0) {
+                    // EOF: il writer ha chiuso
+                    printf("Writer ha chiuso la FIFO %d\n", nodo.vicini[i]);
+                    y[i] = -1;
+                } else {
+                    printf("y[%d] = %d\n", i, y[i]);
                 }
-            
-            
-        }
     }
         //ora invochiamo stf per aggiornare lo stato (dobbiamo capire come passare il parent)
         nodo.stato=stf(nodo.stato,y,numero_vicini);
@@ -213,9 +212,9 @@ void* funzioneThread(void*args){
            for(int i=0;i<numero_vicini;i++){
             if(nodo.stato.parent!=i){
                 int messaggio_da_inviare=msg(nodo.stato,i);
-                char percorso[50];
-                sprintf(percorso,"fifo_%d_%d",nodo.id_nodo,nodo.vicini[i]);
+                char* percorso=ApriFile(nodo.id_nodo,nodo.vicini[i]);
                 int fd=open(percorso,O_WRONLY); //apriamo la fifo in scrittura
+                free(percorso);
                 write(fd,&nodo.stato.messaggio,sizeof(int)); //inviamo il messaggio al nodo i sulla fifo
                 close(fd); 
                 }
