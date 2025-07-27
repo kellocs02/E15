@@ -174,6 +174,7 @@ Nodo CreaNodo(int id){
 void* funzioneThread(void* args) {
     int id = *((int*)args);
     Nodo nodo = CreaNodo(id);
+    
     printf("È stato creato il nodo: %d\n", id);
 
     int numero_vicini = nodo.num_vicini;
@@ -262,6 +263,7 @@ void* funzioneThread(void* args) {
     }
     return NULL;
 }
+
 
 
 int main(){
