@@ -13,6 +13,8 @@
 /*Il nodo deve distribuire il messaggio a tutti i nodi vicini tranne a quello che glielo ha inviato*/
 /*Gli archi tra i nodi saranno gestiti da due pipe*/
 
+pthread_barrier_t barrier;
+
 typedef struct {
     int snd_flag;     
                       
@@ -216,7 +218,7 @@ void* funzioneThread(void* args) {
 
         free(percorso);
     }
-
+    pthread_barrier_wait(&barrier);
     while (1) {
         if (nodo.stato.snd_flag == 0) {
             for (int i = 0; i < numero_vicini; i++) {
@@ -279,6 +281,8 @@ void* funzioneThread(void* args) {
 
 
 int main(){
+    pthread_barrier_init(&barrier, NULL, 6); // 6 thread
+
     int id_nodo[6];
     pthread_t th[6]; //alloco lo spazio in memoria per 6 thread
     for(int i=0;i<6;i++){
@@ -289,5 +293,6 @@ int main(){
     for(int i=0;i<6;i++){
         pthread_join(th[i],NULL); 
     }
+    pthread_barrier_destroy(&barrier);
     return 0;
 }
